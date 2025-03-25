@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - PDF Search Engine{% endblock %}
+
+{% block content %}
+<section class="dashboard-view active-view" id="view-settings">
+    <div class="dashboard-section-header">
+        <h2>Settings</h2>
+    </div>
+    
+    <div class="settings-container">
+        <div class="settings-card">
+            <h3>Index Maintenance</h3>
+            <div class="settings-content">
+                <p>
+                    Rebuild the search index from all PDF files. Use this if search results seem incomplete 
+                    or if PDF files have been modified outside of the application.
+                </p>
+                <form action="{{ url_for('process_pdfs') }}" method="post" class="settings-form">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-sync-alt"></i> Rebuild Search Index
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="settings-card">
+            <h3>Search Settings</h3>
+            <div class="settings-content">
+                <div class="settings-option">
+                    <label>
+                        <input type="checkbox" checked disabled>
+                        Enable stemming (searching for "run" will also find "running", "ran", etc.)
+                    </label>
+                </div>
+                <div class="settings-option">
+                    <label>
+                        <input type="checkbox" checked disabled>
+                        Enable wildcard searches (using * as a wildcard character)
+                    </label>
+                </div>
+                <p class="settings-note">
+                    Note: These settings are currently enabled by default and cannot be changed in this version.
+                </p>
+            </div>
+        </div>
+        
+        <div class="settings-card">
+            <h3>Application Information</h3>
+            <div class="settings-content app-info">
+                <p><strong>PDF Search Engine</strong></p>
+                <p>Version: 1.0.0</p>
+                <p>A tool for indexing and searching PDF documents.</p>
+                <p class="settings-note">
+                    This application uses Whoosh for search indexing and PyPDF2 for PDF text extraction.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %} 

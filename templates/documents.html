@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Documents - PDF Search Engine{% endblock %}
+
+{% block content %}
+<section class="dashboard-view active-view" id="view-documents">
+    <div class="dashboard-section-header">
+        <h2>Document Management</h2>
+        <div class="section-actions">
+            <a href="{{ url_for('upload_page') }}" class="btn-primary">
+                <i class="fas fa-upload"></i> Upload New
+            </a>
+        </div>
+    </div>
+    
+    <div class="documents-container">
+        <div class="enhanced-filter-panel">
+            <div class="filter-section">
+                <div class="filter-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="filter-documents" placeholder="Search documents...">
+                </div>
+                <div class="filter-tags">
+                    <div class="tag-title">File types:</div>
+                    <div class="tag active" data-filter="all">All</div>
+                    <div class="tag" data-filter=".pdf">PDF</div>
+                </div>
+            </div>
+            
+            <div class="sort-section">
+                <label for="sort-documents">Sort by:</label>
+                <select id="sort-documents">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="size-asc">Size (Smallest)</option>
+                    <option value="size-desc">Size (Largest)</option>
+                    <option value="date-desc">Date (Newest)</option>
+                    <option value="date-asc">Date (Oldest)</option>
+                </select>
+            </div>
+            
+            <div class="view-options">
+                <button class="view-option active" data-view="grid">
+                    <i class="fas fa-th-large"></i>
+                </button>
+                <button class="view-option" data-view="list">
+                    <i class="fas fa-list"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="bulk-actions">
+            <div class="select-all-wrapper">
+                <input type="checkbox" id="select-all-pdfs" class="styled-checkbox">
+                <label for="select-all-pdfs">Select All</label>
+            </div>
+            <button id="delete-selected-btn" class="btn-danger" disabled>
+                Delete Selected
+            </button>
+        </div>
+        
+        {% if pdfs %}
+            <div id="documents-grid-view" class="active-view">
+                <div class="document-grid">
+                    {% for pdf in pdfs %}
+                    <div class="document-card" data-name="{{ pdf.name.lower() }}" data-size="{{ pdf.size }}" data-date="{{ pdf.date_modified }}">
+                        <div class="document-select">
+                            <input type="checkbox" id="pdf-select-{{ loop.index }}" class="pdf-select styled-checkbox" data-filename="{{ pdf.name }}">
+                            <label for="pdf-select-{{ loop.index }}"></label>
+                        </div>
+                        <div class="document-icon">
+                            <i class="fas fa-file-pdf"></i>
+                        </div>
+                        <div class="document-info">
+                            <h3 class="document-name">{{ pdf.name }}</h3>
+                            <div class="document-meta">
+                                <span class="document-size">{{ '%.2f'|format(pdf.size/1024) }} KB</span>
+                                <span class="document-date">{{ pdf.date_modified|timestamp_to_date }}</span>
+                            </div>
+                        </div>
+                        <div class="document-actions">
+                            <a href="{{ url_for('view_pdf', filename=pdf.name) }}" class="document-action view-action">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <button class="document-action rename-action" data-filename="{{ pdf.name }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="document-action delete-action" data-filename="{{ pdf.name }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div id="documents-list-view">
+                <table class="documents-table">
+                    <thead>
+                        <tr>
+                            <th class="checkbox-column"></th>
+                            <th class="sortable" data-sort="name">Name <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="size">Size <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="date">Date Modified <i class="fas fa-sort"></i></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pdf in pdfs %}
+                        <tr data-name="{{ pdf.name.lower() }}" data-size="{{ pdf.size }}" data-date="{{ pdf.date_modified }}">
+                            <td>
+                                <input type="checkbox" id="pdf-list-select-{{ loop.index }}" class="pdf-select styled-checkbox" data-filename="{{ pdf.name }}">
+                                <label for="pdf-list-select-{{ loop.index }}"></label>
+                            </td>
+                            <td>{{ pdf.name }}</td>
+                            <td>{{ '%.2f'|format(pdf.size/1024) }} KB</td>
+                            <td>{{ pdf.date_modified|timestamp_to_date }}</td>
+                            <td class="actions-cell">
+                                <a href="{{ url_for('view_pdf', filename=pdf.name) }}" class="table-action view-action">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <button class="table-action rename-action" data-filename="{{ pdf.name }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="table-action delete-action" data-filename="{{ pdf.name }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="no-documents">
+                <div class="no-data-icon">
+                    <i class="fas fa-file-pdf"></i>
+                </div>
+                <h3>No Documents Found</h3>
+                <p>Upload PDF files to start searching through them.</p>
+                <a href="{{ url_for('upload_page') }}" class="btn-primary">
+                    <i class="fas fa-upload"></i> Upload PDFs
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Document filtering
+    const filterInput = document.getElementById('filter-documents');
+    const documentCards = document.querySelectorAll('.document-card');
+    const documentRows = document.querySelectorAll('.documents-table tbody tr');
+    
+    filterInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        
+        // Filter grid view
+        documentCards.forEach(card => {
+            const fileName = card.getAttribute('data-name');
+            card.style.display = fileName.includes(searchTerm) ? 'flex' : 'none';
+        });
+        
+        // Filter list view
+        documentRows.forEach(row => {
+            const fileName = row.getAttribute('data-name');
+            row.style.display = fileName.includes(searchTerm) ? 'table-row' : 'none';
+        });
+    });
+    
+    // Sort functionality
+    const sortSelect = document.getElementById('sort-documents');
+    sortSelect.addEventListener('change', function() {
+        const sortOption = this.value;
+        
+        // Parse option
+        const [sortBy, sortOrder] = sortOption.split('-');
+        
+        // Create arrays to sort
+        const cardsArray = Array.from(documentCards);
+        const rowsArray = Array.from(documentRows);
+        
+        // Sort function
+        const sortFunction = (a, b) => {
+            let aValue, bValue;
+            
+            if (sortBy === 'name') {
+                aValue = a.getAttribute('data-name');
+                bValue = b.getAttribute('data-name');
+            } else if (sortBy === 'size') {
+                aValue = parseFloat(a.getAttribute('data-size'));
+                bValue = parseFloat(b.getAttribute('data-size'));
+            } else if (sortBy === 'date') {
+                aValue = parseFloat(a.getAttribute('data-date'));
+                bValue = parseFloat(b.getAttribute('data-date'));
+            }
+            
+            if (sortOrder === 'asc') {
+                return aValue > bValue ? 1 : -1;
+            } else {
+                return aValue < bValue ? 1 : -1;
+            }
+        };
+        
+        // Sort and reappend
+        cardsArray.sort(sortFunction).forEach(card => {
+            card.parentNode.appendChild(card);
+        });
+        
+        rowsArray.sort(sortFunction).forEach(row => {
+            row.parentNode.appendChild(row);
+        });
+    });
+    
+    // View switching
+    const viewOptions = document.querySelectorAll('.view-option');
+    const gridView = document.getElementById('documents-grid-view');
+    const listView = document.getElementById('documents-list-view');
+    
+    viewOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            viewOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            const view = this.getAttribute('data-view');
+            if (view === 'grid') {
+                gridView.classList.add('active-view');
+                listView.classList.remove('active-view');
+            } else {
+                gridView.classList.remove('active-view');
+                listView.classList.add('active-view');
+            }
+        });
+    });
+    
+    // Filter by tags
+    const filterTags = document.querySelectorAll('.tag');
+    filterTags.forEach(tag => {
+        tag.addEventListener('click', function() {
+            filterTags.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            const filter = this.getAttribute('data-filter');
+            if (filter === 'all') {
+                documentCards.forEach(card => card.style.display = 'flex');
+                documentRows.forEach(row => row.style.display = 'table-row');
+            } else {
+                documentCards.forEach(card => {
+                    const fileName = card.getAttribute('data-name');
+                    card.style.display = fileName.endsWith(filter) ? 'flex' : 'none';
+                });
+                
+                documentRows.forEach(row => {
+                    const fileName = row.getAttribute('data-name');
+                    row.style.display = fileName.endsWith(filter) ? 'table-row' : 'none';
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

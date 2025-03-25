@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results - PDF Search Engine{% endblock %}
+
+{% block content %}
+<section class="dashboard-view active-view">
+    <div class="dashboard-section-header">
+        <h2>Search Results</h2>
+        <div class="section-actions">
+            <a href="{{ url_for('search_page') }}" class="btn-secondary btn-sm">
+                <i class="fas fa-search"></i> New Search
+            </a>
+            <a href="{{ url_for('export_results', query=query) }}" class="btn-secondary btn-sm">
+                <i class="fas fa-file-pdf"></i> Export
+            </a>
+        </div>
+    </div>
+    
+    <div class="search-header">
+        <div class="search-info">
+            <h3>Results for: <span class="search-query">"{{ query }}"</span></h3>
+            <p class="results-count">
+                {{ results.total }} match{% if results.total != 1 %}es{% endif %} in 
+                {{ results.file_count }} document{% if results.file_count != 1 %}s{% endif %}
+                {% if results.grouped %}
+                    <span>(grouped by file)</span>
+                    <a href="{{ url_for('search', query=query, group='false', page=1) }}" class="btn-outline-primary btn-sm" style="margin-left: 10px">
+                        <i class="fas fa-list"></i> Show all
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('search', query=query, group='true', page=1) }}" class="btn-outline-primary btn-sm" style="margin-left: 10px">
+                        <i class="fas fa-layer-group"></i> Group by file
+                    </a>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    
+    {% if not results.results or results.results|length == 0 %}
+    <div class="no-results">
+        <div class="no-results-icon">
+            <i class="fas fa-search"></i>
+        </div>
+        <h3>No results found</h3>
+        <p>No documents match your search criteria. Try broadening your search terms or check if your documents are properly indexed.</p>
+        
+        <a href="{{ url_for('search_page') }}" class="btn-primary">
+            <i class="fas fa-search"></i> Try another search
+        </a>
+    </div>
+    {% else %}
+    <div class="results-list">
+        {% for result in results.results %}
+        <div class="result-card">
+            <div class="result-header">
+                <div class="result-title">
+                    <i class="fas fa-file-pdf"></i>
+                    <h3>{{ result.filename }}</h3>
+                    <span class="match-count">{{ result.match_count|default('1') }}</span>
+                </div>
+                <div class="result-meta">
+                    <span class="result-page-info">
+                        <i class="fas fa-file-alt" style="font-size: 0.8rem"></i>
+                        Page {{ result.page + 1 if result.page is defined else (result['page'] + 1 if result['page'] is defined else '?') }}
+                    </span>
+                    <div class="result-actions">
+                        <a href="{{ url_for('view_matches', filename=result.filename, query=query) }}" class="result-action" data-tooltip="View All Matches">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="result-content">
+                <div class="result-matches">
+                    {% if result.highlight %}
+                    <div class="result-match">{{ result.highlight|safe }}</div>
+                    {% endif %}
+                    
+                    <!-- Only show context if explicitly available -->
+                    {% if result.context_before %}
+                    <div class="result-match">{{ result.context_before|safe }}</div>
+                    {% endif %}
+                    
+                    {% if result.context_after %}
+                    <div class="result-match">{{ result.context_after|safe }}</div>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('view_pdf', filename=result.filename, page=result.page) }}" class="result-view-link">
+                    <i class="fas fa-external-link-alt"></i> View in document
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Pagination -->
+    {% if results.pages > 1 %}
+    <div class="pagination">
+        {% if results.page > 1 %}
+            <a href="{{ url_for('search', query=query, page=results.page-1, group=request.args.get('group', 'true')) }}" class="pagination-item">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        {% endif %}
+        
+        {% for p in range(1, results.pages + 1) %}
+            <a href="{{ url_for('search', query=query, page=p, group=request.args.get('group', 'true')) }}" 
+               class="pagination-item {% if p == results.page %}active{% endif %}">
+                {{ p }}
+            </a>
+        {% endfor %}
+        
+        {% if results.page < results.pages %}
+            <a href="{{ url_for('search', query=query, page=results.page+1, group=request.args.get('group', 'true')) }}" class="pagination-item">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips for compact action buttons
+    initializeTooltips();
+    
+    // Animate result cards for a smoother appearance
+    animateResultCards();
+});
+
+function animateResultCards() {
+    document.querySelectorAll('.result-card').forEach((card, index) => {
+        card.style.animationDelay = `${index * 50}ms`;
+    });
+}
+</script>
+{% endblock %} 
