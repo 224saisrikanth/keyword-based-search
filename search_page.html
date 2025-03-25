@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Search PDFs - PDF Search Engine{% endblock %}
+
+{% block content %}
+<section class="dashboard-view active-view">
+    <div class="dashboard-section-header">
+        <h2>Search Documents</h2>
+    </div>
+    
+    <div class="search-container centered">
+        <div class="search-form-wrapper">
+            <div class="search-intro">
+                <h3>Find content in your PDF documents</h3>
+                <p class="search-guide">
+                    Enter search terms below to find matching content across all your indexed PDF documents.
+                    <br>Use quotes for exact phrases, e.g., "keyword phrase".
+                </p>
+            </div>
+            
+            <form action="{{ url_for('search') }}" method="get" class="search-form">
+                <div class="search-input-wrapper">
+                    <input type="text" name="query" placeholder="Enter search terms..." 
+                           class="main-search-input" required autofocus>
+                </div>
+                
+                <button type="submit" class="search-button">
+                    <i class="fas fa-search"></i> Search Documents
+                </button>
+            </form>
+            
+            <div class="search-tips">
+                <h4>Search Tips:</h4>
+                <ul>
+                    <li><strong>Multiple terms:</strong> Enter several keywords to find documents containing all terms</li>
+                    <li><strong>Exact phrases:</strong> Use quotes around phrases to find exact matches, e.g., "search term"</li>
+                    <li><strong>File search:</strong> Include part of the filename to narrow results to specific documents</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Simple auto-focus for the search input
+    const searchInput = document.querySelector('.main-search-input');
+    if (searchInput) {
+        searchInput.focus();
+    }
+});
+</script>
+{% endblock %} 
