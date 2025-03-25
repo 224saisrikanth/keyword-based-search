@@ -1,0 +1,802 @@
+function debugSearchNavigation() {
+    console.log('Search Navigation Status:');
+    console.log('- Current Path:', window.location.pathname);
+    console.log('- Current URL:', window.location.href);
+    console.log('- Referrer:', document.referrer);
+    console.log('- localStorage.lastSearchUrl:', localStorage.getItem('lastSearchUrl'));
+    console.log('- localStorage.lastSearchQuery:', localStorage.getItem('lastSearchQuery'));
+}
+
+function saveSearchState() {
+    if (window.location.pathname === '/search') {
+        // Store the full search URL including all parameters 
+        const fullSearchUrl = window.location.href;
+        localStorage.setItem('lastSearchUrl', fullSearchUrl);
+        console.log('Saved search URL:', fullSearchUrl);
+        
+        // Also store just the query for fallback
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get('query');
+        if (query) {
+            localStorage.setItem('lastSearchQuery', query);
+            console.log('Saved search query:', query);
+        }
+        
+        // Debug
+        debugSearchNavigation();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Save search state on page load
+    saveSearchState();
+    
+    // Add event listener to search forms
+    document.querySelectorAll('form.search-form').forEach(form => {
+        form.addEventListener('submit', function() {
+            const queryInput = this.querySelector('input[name="query"]');
+            if (queryInput && queryInput.value) {
+                localStorage.setItem('lastSearchQuery', queryInput.value);
+            }
+        });
+    });
+    
+    // ===== Handle direct URL navigation and back button =====
+    const currentPath = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    // Store original document.referrer for back navigation
+    const referrer = document.referrer;
+    
+    // Set active sidebar item based on URL
+    const setActiveSidebarItem = (path) => {
+        const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+        sidebarLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            const isActive = 
+                href === path || 
+                (path.includes('/search') && link.id === 'nav-search') ||
+                (path.includes('/documents') && link.id === 'nav-documents') ||
+                (path.includes('/upload') && link.id === 'nav-upload');
+            
+            link.parentElement.classList.toggle('active', isActive);
+        });
+    };
+    
+    // Set initial active state
+    setActiveSidebarItem(currentPath);
+    
+    // Fix back button behavior
+    window.addEventListener('popstate', function(event) {
+        // Use History API state if available
+        const historyPath = event.state?.path || window.location.pathname;
+        setActiveSidebarItem(historyPath);
+    });
+    
+    // Update history state when navigation occurs
+    document.querySelectorAll('.sidebar-nav a').forEach(link => {
+        link.addEventListener('click', function(e) {
+            // Don't prevent default, allow normal navigation
+            // But add state to history
+            const path = this.getAttribute('href');
+            history.pushState({ path: path }, '', path);
+        });
+    });
+    
+    // Set initial history state if needed
+    if (!history.state) {
+        history.replaceState({ path: currentPath }, '', currentPath);
+    }
+    
+    // Fix for document viewer back button
+    if (currentPath.includes('/view/')) {
+        // If we're viewing a document, we should remember where we came from
+        const fromSearch = referrer && (
+            referrer.includes('/search') || 
+            localStorage.getItem('lastSearchQuery')
+        );
+        
+        if (fromSearch) {
+            // Add a data attribute to the back button
+            const backLinks = document.querySelectorAll('.back-to-results');
+            backLinks.forEach(link => {
+                const lastQuery = localStorage.getItem('lastSearchQuery');
+                if (lastQuery) {
+                    link.setAttribute('href', `/search?query=${encodeURIComponent(lastQuery)}`);
+                    link.addEventListener('click', function(e) {
+                        // Don't actually follow the link, use history.back() which is more reliable
+                        e.preventDefault();
+                        history.back();
+                    });
+                }
+            });
+        }
+    }
+    
+    // For search pages, remember the query
+    if (currentPath.includes('/search')) {
+        const query = searchParams.get('query');
+        if (query) {
+            localStorage.setItem('lastSearchQuery', query);
+        }
+    }
+    
+    // Add this to document viewers
+    if (document.querySelector('.pdf-viewer-container')) {
+        // Add back button to PDF viewer if it doesn't exist
+        if (!document.querySelector('.back-to-results')) {
+            const viewerHeader = document.querySelector('.viewer-header');
+            if (viewerHeader) {
+                const backBtn = document.createElement('a');
+                backBtn.className = 'btn-secondary back-to-results';
+                backBtn.innerHTML = '<i class="fas fa-arrow-left"></i> Back to Results';
+                backBtn.href = '#';
+                backBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    history.back();
+                });
+                viewerHeader.prepend(backBtn);
+            }
+        }
+    }
+    
+    // ===== Toggle sidebar on mobile =====
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+    const dashboardContainer = document.querySelector('.dashboard-container');
+    
+    if (toggleSidebarBtn) {
+        toggleSidebarBtn.addEventListener('click', function() {
+            dashboardContainer.classList.toggle('sidebar-collapsed');
+        });
+    }
+    
+    // ===== Flash Message Close Buttons =====
+    const closeMessageBtns = document.querySelectorAll('.close-message');
+    closeMessageBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.closest('.message').style.display = 'none';
+        });
+    });
+    
+    // ===== PDF Document Actions =====
+    // Delete buttons (individual)
+    const deleteButtons = document.querySelectorAll('.delete-action, .table-action.delete-action');
+    const deleteModal = document.getElementById('delete-modal');
+    const deleteFilenameInput = document.getElementById('delete-filename');
+    
+    if (deleteButtons.length > 0) {
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const filename = this.getAttribute('data-filename');
+                
+                if (deleteModal && deleteFilenameInput) {
+                    deleteFilenameInput.value = filename;
+                    
+                    // Update modal text
+                    const modalText = deleteModal.querySelector('p');
+                    if (modalText) {
+                        modalText.innerHTML = `Are you sure you want to delete <strong>${filename}</strong>? This action cannot be undone.`;
+                    }
+                    
+                    deleteModal.style.display = 'block';
+                }
+            });
+        });
+    }
+    
+    // Rename buttons
+    const renameButtons = document.querySelectorAll('.rename-action, .table-action.rename-action');
+    const renameModal = document.getElementById('rename-modal');
+    const originalFilenameInput = document.getElementById('original-filename');
+    const newFilenameInput = document.getElementById('new-filename');
+    
+    if (renameButtons.length > 0) {
+        renameButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const filename = this.getAttribute('data-filename');
+                
+                if (renameModal && originalFilenameInput && newFilenameInput) {
+                    originalFilenameInput.value = filename;
+                    newFilenameInput.value = filename;
+                    
+                    renameModal.style.display = 'block';
+                }
+            });
+        });
+    }
+    
+    // ===== Modal Controls =====
+    // Close buttons for modals
+    const closeButtons = document.querySelectorAll('.close, .cancel-action, .cancel-delete');
+    const modals = document.querySelectorAll('.modal');
+    
+    closeButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            modals.forEach(modal => {
+                modal.style.display = 'none';
+            });
+        });
+    });
+    
+    // Close modals when clicking outside
+    window.addEventListener('click', function(event) {
+        modals.forEach(modal => {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+    
+    // Escape key to close modals
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            modals.forEach(modal => {
+                modal.style.display = 'none';
+            });
+        }
+    });
+    
+    // ===== Document View Switching (Grid/List) =====
+    const viewOptions = document.querySelectorAll('.view-option');
+    const gridView = document.getElementById('documents-grid-view');
+    const listView = document.getElementById('documents-list-view');
+    
+    if (viewOptions.length > 0 && gridView && listView) {
+        viewOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                viewOptions.forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                
+                const viewType = this.getAttribute('data-view');
+                if (viewType === 'grid') {
+                    gridView.classList.add('active-view');
+                    listView.classList.remove('active-view');
+                } else {
+                    gridView.classList.remove('active-view');
+                    listView.classList.add('active-view');
+                }
+            });
+        });
+    }
+    
+    // ===== Checkbox Selection =====
+    const selectAllCheckbox = document.getElementById('select-all-pdfs');
+    const pdfCheckboxes = document.querySelectorAll('.pdf-select');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const bulkDeleteModal = document.getElementById('bulk-delete-modal');
+    
+    // Handle select all
+    if (selectAllCheckbox && pdfCheckboxes.length > 0) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            
+            pdfCheckboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            
+            updateDeleteSelectedButton();
+        });
+        
+        // Individual checkbox changes
+        pdfCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateDeleteSelectedButton();
+                
+                // Update select all checkbox state
+                const allChecked = Array.from(pdfCheckboxes).every(cb => cb.checked);
+                const someChecked = Array.from(pdfCheckboxes).some(cb => cb.checked);
+                
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = someChecked && !allChecked;
+            });
+        });
+    }
+    
+    // Delete selected button
+    if (deleteSelectedBtn && bulkDeleteModal) {
+        deleteSelectedBtn.addEventListener('click', function() {
+            const checkedBoxes = document.querySelectorAll('.pdf-select:checked');
+            const selectedFilesList = document.getElementById('selected-files-list');
+            const selectedFilesInputs = document.getElementById('selected-files-inputs');
+            
+            if (checkedBoxes.length > 0 && selectedFilesList && selectedFilesInputs) {
+                // Clear previous list and inputs
+                selectedFilesList.innerHTML = '';
+                selectedFilesInputs.innerHTML = '';
+                
+                // Add files to list and hidden inputs
+                checkedBoxes.forEach(checkbox => {
+                    const filename = checkbox.getAttribute('data-filename');
+                    
+                    // Create list item
+                    const listItem = document.createElement('div');
+                    listItem.className = 'selected-file-item';
+                    listItem.textContent = filename;
+                    selectedFilesList.appendChild(listItem);
+                    
+                    // Create hidden input
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'filenames[]';
+                    input.value = filename;
+                    selectedFilesInputs.appendChild(input);
+                });
+                
+                // Update modal title
+                const modalTitle = bulkDeleteModal.querySelector('h2');
+                if (modalTitle) {
+                    modalTitle.textContent = `Delete ${checkedBoxes.length} Selected PDF${checkedBoxes.length > 1 ? 's' : ''}`;
+                }
+                
+                // Show the modal
+                bulkDeleteModal.style.display = 'block';
+            }
+        });
+    }
+    
+    // Update delete selected button state
+    function updateDeleteSelectedButton() {
+        if (!deleteSelectedBtn) return;
+        
+        const checkedBoxes = document.querySelectorAll('.pdf-select:checked');
+        const count = checkedBoxes.length;
+        
+        // Update button state
+        deleteSelectedBtn.disabled = count === 0;
+        
+        // Update button text
+        if (count > 0) {
+            deleteSelectedBtn.textContent = `Delete Selected (${count})`;
+        } else {
+            deleteSelectedBtn.textContent = 'Delete Selected';
+        }
+    }
+    
+    // Initialize button state if needed
+    if (deleteSelectedBtn) {
+        updateDeleteSelectedButton();
+    }
+    
+    // Add page transition class to main content sections
+    const mainContent = document.querySelector('.dashboard-main');
+    if (mainContent) {
+        mainContent.classList.add('page-transition');
+    }
+    
+    // Add animation to cards
+    animateElementsOnScroll();
+    
+    // Initialize tooltip functionality
+    initializeTooltips();
+    
+    // Initialize smooth scrolling for anchor links
+    initializeSmoothScrolling();
+
+    // Add hover effects to all cards
+    enhanceCardInteractions();
+    
+    // Enhanced flash message handling
+    enhanceFlashMessages();
+
+    // Add staggered animation to result cards
+    const resultCards = document.querySelectorAll('.result-card');
+    resultCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 80}ms`;
+    });
+    
+    // Add subtle hover effects to cards
+    addCardHoverEffects();
+    
+    // Add parallax effect to background
+    addParallaxBackgroundEffect();
+    
+    // Add highlight pulsing effect
+    addHighlightPulseEffect();
+    
+    // Add glassmorphism depth effect
+    addGlassmorphismEffect();
+});
+
+// Animate elements as they scroll into view
+function animateElementsOnScroll() {
+    // Only run if IntersectionObserver is supported
+    if ('IntersectionObserver' in window) {
+        const cards = document.querySelectorAll('.stat-card, .document-card, .result-card');
+        
+        const options = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
+        
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    // Add a small delay based on index for cascade effect
+                    const delay = Array.from(cards).indexOf(entry.target) * 50;
+                    setTimeout(() => {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }, delay);
+                    
+                    // Stop observing after animation
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, options);
+        
+        // Set initial styles and observe each card
+        cards.forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            observer.observe(card);
+        });
+    }
+}
+
+// Initialize tooltips for action buttons
+function initializeTooltips() {
+    const tooltipTriggers = document.querySelectorAll('[data-tooltip]');
+    
+    tooltipTriggers.forEach(trigger => {
+        const tooltipText = trigger.getAttribute('data-tooltip');
+        
+        // Create tooltip element with sleek design
+        const tooltip = document.createElement('div');
+        tooltip.className = 'elegant-tooltip';
+        tooltip.textContent = tooltipText;
+        document.body.appendChild(tooltip);
+        
+        // Show tooltip on hover with sleek animation
+        trigger.addEventListener('mouseenter', () => {
+            const rect = trigger.getBoundingClientRect();
+            tooltip.style.left = (rect.left + rect.width/2) + 'px';
+            tooltip.style.top = rect.top - 8 + 'px';
+            tooltip.style.opacity = '0';
+            tooltip.style.transform = 'translateY(10px) translateX(-50%)';
+            tooltip.classList.add('visible');
+            
+            // Animate in
+            setTimeout(() => {
+                tooltip.style.opacity = '1';
+                tooltip.style.transform = 'translateY(-10px) translateX(-50%)';
+            }, 10);
+        });
+        
+        // Hide tooltip on mouse leave with animation
+        trigger.addEventListener('mouseleave', () => {
+            tooltip.style.opacity = '0';
+            tooltip.style.transform = 'translateY(10px) translateX(-50%)';
+            
+            setTimeout(() => {
+                tooltip.classList.remove('visible');
+            }, 300);
+        });
+    });
+}
+
+// Initialize smooth scrolling for anchor links
+function initializeSmoothScrolling() {
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+            const target = document.querySelector(this.getAttribute('href'));
+            
+            if (target) {
+                e.preventDefault();
+                
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+                
+                // Update URL without page reload
+                history.pushState(null, null, this.getAttribute('href'));
+            }
+        });
+    });
+}
+
+// Enhance card interactions
+function enhanceCardInteractions() {
+    const cards = document.querySelectorAll('.document-card, .stat-card, .result-card');
+    
+    cards.forEach(card => {
+        // Add subtle movement on mouse move for 3D effect
+        card.addEventListener('mousemove', function(e) {
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left; // x position within the element
+            const y = e.clientY - rect.top; // y position within the element
+            
+            // Calculate rotation based on mouse position
+            // The closer to an edge, the more it rotates
+            const rotateX = (y - rect.height / 2) / 20;
+            const rotateY = (rect.width / 2 - x) / 20;
+            
+            // Apply the rotation transform
+            this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-2px)`;
+        });
+        
+        // Reset transform on mouse leave
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = '';
+        });
+        
+        // Add focus effect
+        card.addEventListener('click', function() {
+            this.classList.add('pulse-highlight');
+            setTimeout(() => {
+                this.classList.remove('pulse-highlight');
+            }, 1500);
+        });
+    });
+}
+
+// Enhanced flash messages with animations
+function enhanceFlashMessages() {
+    const flashMessages = document.querySelectorAll('.message');
+    
+    flashMessages.forEach((message, index) => {
+        // Stagger the appearance of messages
+        message.style.animationDelay = `${index * 150}ms`;
+        
+        // Add auto-dismiss after delay for success messages
+        if (message.classList.contains('success')) {
+            setTimeout(() => {
+                dismissMessage(message);
+            }, 5000 + (index * 150));
+        }
+        
+        // Add click handler for close button
+        const closeBtn = message.querySelector('.close-message');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                dismissMessage(message);
+            });
+        }
+    });
+}
+
+// Dismiss message with animation
+function dismissMessage(message) {
+    message.style.animation = 'slideOut 0.3s ease-out forwards';
+    
+    // Remove after animation completes
+    setTimeout(() => {
+        if (message.parentNode) {
+            message.parentNode.removeChild(message);
+        }
+    }, 300);
+}
+
+// Add this to your existing styles
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideOut {
+        to {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+    }
+    
+    .tooltip {
+        position: fixed;
+        background-color: var(--text-dark);
+        color: white;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-xs);
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+        pointer-events: none;
+    }
+    
+    .tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: var(--text-dark) transparent transparent transparent;
+    }
+    
+    .tooltip.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    /* Add pulse animation for search highlights */
+    @keyframes highlightPulse {
+        0% { box-shadow: 0 0 0 rgba(255, 51, 102, 0); }
+        50% { box-shadow: 0 0 10px rgba(255, 51, 102, 0.3); }
+        100% { box-shadow: 0 0 0 rgba(255, 51, 102, 0); }
+    }
+    
+    /* Enhance card hover effect */
+    .result-card {
+        transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    
+    .pulse-highlight {
+        animation: highlightPulse 1.5s ease-in-out;
+    }
+`;
+document.head.appendChild(style);
+
+// Add subtle 3D hover effect to cards
+function addCardHoverEffects() {
+    const cards = document.querySelectorAll('.result-card');
+    
+    cards.forEach(card => {
+        card.addEventListener('mousemove', function(e) {
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left; 
+            const y = e.clientY - rect.top; 
+            
+            // Calculate rotation based on mouse position
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            // Limit the rotation to a subtle amount (3 degrees max)
+            const rotateY = ((x - centerX) / centerX) * 2; 
+            const rotateX = -((y - centerY) / centerY) * 1;
+            
+            // Apply the transform with subtle perspective
+            this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-6px) scale(1.01)`;
+            
+            // Add subtle gradient overlay based on mouse position
+            const gradientAngle = Math.atan2(y - centerY, x - centerX) * (180 / Math.PI);
+            const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+            const normalizedDistance = Math.min(1, distance / (Math.sqrt(Math.pow(centerX, 2) + Math.pow(centerY, 2))));
+            
+            // Apply subtle gradient overlay
+            this.style.background = `
+                linear-gradient(
+                    ${gradientAngle}deg,
+                    rgba(255, 255, 255, 0.95) 0%,
+                    rgba(248, 250, 255, 0.95) ${normalizedDistance * 100}%
+                )
+            `;
+            
+            // Add subtle shadow movement
+            this.style.boxShadow = `
+                0 ${16 + y/30}px ${24 + y/20}px rgba(0, 0, 0, 0.07), 
+                ${(x-centerX)/20}px ${6 + y/40}px ${12 + Math.abs(x-centerX)/40}px rgba(0, 0, 0, 0.03)
+            `;
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            // Reset transforms on mouse leave with smooth transition
+            this.style.transform = '';
+            this.style.boxShadow = '';
+            this.style.background = '';
+        });
+    });
+}
+
+// Add parallax effect to background
+function addParallaxBackgroundEffect() {
+    const container = document.querySelector('.dashboard-view');
+    if (!container) return;
+    
+    // Create the parallax effect
+    window.addEventListener('mousemove', function(e) {
+        const mouseX = e.clientX / window.innerWidth;
+        const mouseY = e.clientY / window.innerHeight;
+        
+        // Apply subtle background gradient shift based on mouse position
+        container.style.backgroundImage = `linear-gradient(
+            135deg, 
+            #fcfcff ${mouseX * 5}%, 
+            #f0f4ff ${100 - mouseY * 5}%
+        )`;
+        
+        // Animate the pseudo-element
+        const pseudoElement = document.querySelector('.dashboard-view.active-view::before');
+        if (pseudoElement) {
+            container.style.setProperty('--glow-position-x', `${mouseX * 100}%`);
+            container.style.setProperty('--glow-position-y', `${mouseY * 100}%`);
+        }
+    });
+}
+
+// Add pulsing effect to search term highlights
+function addHighlightPulseEffect() {
+    const highlights = document.querySelectorAll('.match-highlight');
+    
+    highlights.forEach(highlight => {
+        // Add initial animation
+        highlight.style.animation = 'highlightPulse 2s infinite';
+        
+        highlight.addEventListener('mouseenter', function() {
+            // Pause animation and apply hover effect
+            this.style.animation = 'none';
+            this.style.transform = 'scale(1.05)';
+            this.style.boxShadow = '0 2px 8px rgba(254, 67, 101, 0.2)';
+            this.style.background = 'rgba(255, 51, 102, 0.18)';
+        });
+        
+        highlight.addEventListener('mouseleave', function() {
+            // Resume animation
+            this.style.transform = '';
+            this.style.boxShadow = '';
+            this.style.background = '';
+            this.style.animation = 'highlightPulse 2s infinite';
+        });
+    });
+}
+
+// Add depth to glassmorphism elements
+function addGlassmorphismEffect() {
+    const glassElements = document.querySelectorAll('.search-header');
+    
+    glassElements.forEach(element => {
+        // Add initial depth effect
+        element.style.boxShadow = '0 8px 32px rgba(31, 38, 135, 0.15)';
+        
+        element.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 12px 32px rgba(31, 38, 135, 0.2)';
+        });
+        
+        element.addEventListener('mouseleave', function() {
+            this.style.transform = '';
+            this.style.boxShadow = '0 8px 32px rgba(31, 38, 135, 0.15)';
+        });
+    });
+}
+
+// Add the dynamic tooltip style
+const tooltipStyle = document.createElement('style');
+tooltipStyle.textContent = `
+    .elegant-tooltip {
+        position: absolute;
+        background: linear-gradient(135deg, #4a6cf7, #3955d8);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(74, 108, 247, 0.25);
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        white-space: nowrap;
+    }
+    
+    .elegant-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -6px;
+        width: 12px;
+        height: 12px;
+        background: #4a6cf7;
+        transform: rotate(45deg) translateY(-6px);
+        z-index: -1;
+    }
+    
+    .elegant-tooltip.visible {
+        display: block;
+    }
+    
+    /* Enhanced highlight animations */
+    @keyframes highlightBreathe {
+        0% { background-color: rgba(255, 51, 102, 0.12); }
+        50% { background-color: rgba(255, 51, 102, 0.18); }
+        100% { background-color: rgba(255, 51, 102, 0.12); }
+    }
+    
+    .match-highlight {
+        animation: highlightBreathe 2s infinite ease-in-out;
+    }
+`;
+document.head.appendChild(tooltipStyle); 
