@@ -1,0 +1,9 @@
+Flask
+PyMuPDF
+pyarrow
+whoosh
+python-dotenv 
+fpdf
+PyPDF2
+pandas
+reportlab
